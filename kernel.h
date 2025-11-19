@@ -1,6 +1,6 @@
 #pragma once
 
 struct sbiret {
-	long error;
-	long value;
+    long error;
+    long value;
 };
