@@ -11,7 +11,7 @@
 #define false 0
 #define NULL ((void *) 0)
 #define align_up(value, align)   __builtin_align_up(value, align)
-#define is_aligned(value, align) __bultin_is_aligned(value, align)
+#define is_aligned(value, align) __builtin_is_aligned(value, align)
 #define offsetof(type, member)   __bultin_offsetof(type, member)
 
 

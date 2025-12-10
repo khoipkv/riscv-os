@@ -3,13 +3,21 @@
 
 extern char __bss[], __bss_end[], __stack_top[];
 extern char __free_ram[], __free_ram_end[];
+extern char __kernel_base[];
 
+struct process procs[PROCS_MAX];
+struct process * proc_a;
+struct process * proc_b;
+struct process * curr_proc;
+struct process * idle_proc;
 
 __attribute__((naked))
 __attribute__((aligned(4)))
 void kernel_entry(void) {
     __asm__ __volatile__(
+        // Get kernel stack at the beginning
         "csrw sscratch, sp\n"
+
         "addi sp, sp, -4 * 31\n"
         "sw ra,  4 * 0(sp)\n"
         "sw gp,  4 * 1(sp)\n"
@@ -42,8 +50,13 @@ void kernel_entry(void) {
         "sw s10, 4 * 28(sp)\n"
         "sw s11, 4 * 29(sp)\n"
 
+        // Get and save the sp at the time of exception
         "csrr a0, sscratch\n"
         "sw a0, 4 * 30(sp)\n"
+
+        // Reset the kernel stack
+        "addi a0, sp, 4 * 31\n"
+        "csrw sscratch, a0\n"
 
         "mv a0, sp\n"
         "call handle_trap\n"
@@ -125,6 +138,7 @@ __attribute__((naked)) void switch_context(uint32_t *prev_sp,
     );
 }
 
+
 paddr_t alloc_pages(uint32_t n) {
     static paddr_t next_paddr = (paddr_t) __free_ram;
     paddr_t paddr = next_paddr;
@@ -133,6 +147,71 @@ paddr_t alloc_pages(uint32_t n) {
 
     memset((void *) paddr, 0, n * PAGE_SIZE);
     return paddr;
+}
+
+
+void map_page(uint32_t *table1, uint32_t vaddr, uint32_t paddr,
+              uint32_t flags) {
+    if (!is_aligned(vaddr, PAGE_SIZE))
+        PANIC("Unaligned vaddr=%x", vaddr);
+
+    if (!is_aligned(paddr, PAGE_SIZE))
+        PANIC("Unaligned paddr=%x", paddr);
+
+    uint32_t vpn1 = (vaddr >> 22) & 0x3ff;
+    if ((table1[vpn1] & PAGE_V) == 0){
+        uint32_t pt_paddr = alloc_pages(1);
+        table1[vpn1] = ((pt_paddr / PAGE_SIZE) << 10) | PAGE_V;
+    }
+
+    // Set the 2nd level page table entry to map the physical page.
+    uint32_t vpn0 = (vaddr >> 12) & 0x3ff;
+    uint32_t *table0 = (uint32_t *) ((table1[vpn1] >> 10) * PAGE_SIZE);
+    table0[vpn0] = ((paddr / PAGE_SIZE) << 10) | flags | PAGE_V;
+}
+
+
+struct process *create_process(uint32_t pc) {
+    // Find an unused process control structure
+    struct process * proc = NULL;
+    int i;
+    for (i = 0; i < PROCS_MAX; i++) {
+        if (procs[i].state == PROC_UNUSED) {
+            proc = &procs[i];
+            break;
+        }
+    }
+
+    if (!proc) PANIC("Couldn't find an unused process!");
+
+    uint32_t *sp = (uint32_t *) &proc->stack[sizeof(proc->stack)];
+
+    *--sp = 0;              // s11
+    *--sp = 0;              // s10
+    *--sp = 0;              // s9
+    *--sp = 0;              // s8
+    *--sp = 0;              // s7
+    *--sp = 0;              // s6
+    *--sp = 0;              // s5
+    *--sp = 0;              // s4
+    *--sp = 0;              // s3
+    *--sp = 0;              // s2
+    *--sp = 0;              // s1
+    *--sp = 0;              // s0
+    *--sp = (uint32_t) pc;  // ra
+
+    uint32_t *page_table = (uint32_t *) alloc_pages(1);
+    for (paddr_t paddr = (paddr_t) __kernel_base;
+         paddr < (paddr_t) __free_ram_end; paddr += PAGE_SIZE) {
+        map_page(page_table, paddr, paddr, PAGE_R | PAGE_W | PAGE_X);
+    }
+
+    // Initialize fields
+    proc->pid = i + 1;
+    proc->state = PROC_RUNNABLE;
+    proc->sp = (uint32_t) sp;
+    proc->page_table = page_table;
+    return proc;
 }
 
 
@@ -164,21 +243,103 @@ struct sbiret sbi_call(long arg0, long arg1, long arg2, long arg3, long arg4,
     return (struct sbiret){.error = a0, .value = a1};
 }
 
+
 void putchar(char ch) {
     sbi_call(ch, 0, 0, 0, 0, 0, 0, 1 /* Console Putchar */);
 }
 
+
+void delay(void) {
+    for (int i = 0; i < 30000000; i++) {
+        __asm__ __volatile__("nop"); // do nothing
+    }
+}
+
+
+void yield(void) {
+    // Search for a runnable process
+    struct process *next = idle_proc;
+
+    for (int i = 0; i < PROCS_MAX; i++) {
+        int proc_idx = (curr_proc->pid + i) % PROCS_MAX;
+        struct process * proc = &procs[proc_idx];
+        if (proc->state == PROC_RUNNABLE && proc->pid > 0) {
+            next = proc;
+            break;
+        }
+    }
+
+    // If no other runnable proc, continue with the current process
+    if (next == curr_proc) return;
+
+    __asm__ __volatile__(
+        "csrw sscratch, %[sscratch]\n"
+        :
+        : [sscratch] "r" ((uint32_t) &next->stack[sizeof(next->stack)])
+    );
+
+    // Context switch
+    struct process *prev = curr_proc;
+    curr_proc = next;
+
+    __asm__ __volatile__ (
+      "sfence.vma\n"
+      "csrw satp, %[satp]\n"
+      "sfence.vma\n"
+      "csrw sscratch, %[sscratch]\n"
+      :
+      : [satp] "r" (SATP_SV32 | ((uint32_t) next->page_table / PAGE_SIZE)),
+        [sscratch] "r" ((uint32_t) &next->stack[sizeof(next->stack)])
+    );
+
+    switch_context(&prev->sp, &next->sp);
+}
+
+
+void proc_a_entry(void) {
+    printf("Starting process a: \n");
+    while(1) {
+        putchar('A');
+        // switch_context(&proc_a->sp, &proc_b->sp);
+        delay();
+        yield();
+    }
+}
+
+
+void proc_b_entry(void) {
+    printf("Starting process b: \n");
+    while(1) {
+        putchar('B');
+        // switch_context(&proc_b->sp, &proc_a->sp);
+        delay();
+        yield();
+    }
+}
+
+
 void kernel_main(void) {
-    printf("\n\nHello %s\n", "World!");
-    printf("1 + 2 = %d, %x\n", 1 + 2, 0x1234abcd);
-
-    paddr_t paddr0 = alloc_pages(2);
-    paddr_t paddr1 = alloc_pages(1);
+    // paddr_t paddr0 = alloc_pages(2);
+    // paddr_t paddr1 = alloc_pages(1);
     
-    printf("alloc_pages test: paddr0=%x\n", paddr0);
-    printf("alloc_pages test: paddr1=%x\n", paddr1);
+    // printf("alloc_pages test: paddr0=%x\n", paddr0);
+    // printf("alloc_pages test: paddr1=%x\n", paddr1);
 
+    memset(__bss, 0, (size_t) __bss_end - (size_t) __bss);
     WRITE_CSR(stvec, (uint32_t) kernel_entry);
+
+    idle_proc = create_process((uint32_t) NULL);
+    idle_proc->pid = 0;
+    curr_proc = idle_proc;
+
+    proc_a = create_process((uint32_t) proc_a_entry);
+    proc_b = create_process((uint32_t) proc_b_entry);
+    
+    yield();
+    PANIC("Switched to idle process");
+
+    // proc_a_entry();
+
     __asm__ __volatile__("unimp");
 
     PANIC("BOOTED!\n");
