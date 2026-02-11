@@ -17,7 +17,7 @@ __attribute__((aligned(4)))
 void kernel_entry(void) {
     __asm__ __volatile__(
         // Get kernel stack at the beginning
-        "csrw sscratch, sp\n"
+        "csrrw sp, sscratch, sp\n"
 
         "addi sp, sp, -4 * 31\n"
         "sw ra,  4 * 0(sp)\n"
@@ -98,7 +98,7 @@ void kernel_entry(void) {
 }
 
 
-void user_entry(void) {
+__attribute__((naked)) void user_entry(void) {
     __asm__ __volatile__(
         "csrw sepc, %[sepc]         \n"
         "csrw sstatus, %[sstatus]   \n"
@@ -157,14 +157,14 @@ paddr_t alloc_pages(uint32_t n) {
     static paddr_t next_paddr = (paddr_t) __free_ram;
     paddr_t paddr = next_paddr;
     next_paddr += n * PAGE_SIZE;
-    if (next_paddr > (paddr_t) __free_ram_end) PANIC("Out of memory!");
+    if (next_paddr >= (paddr_t) __free_ram_end) PANIC("Out of memory!");
 
     memset((void *) paddr, 0, n * PAGE_SIZE);
     return paddr;
 }
 
 
-void map_page(uint32_t *table1, uint32_t vaddr, uint32_t paddr,
+void map_page(uint32_t *table1, uint32_t vaddr, paddr_t paddr,
               uint32_t flags) {
     if (!is_aligned(vaddr, PAGE_SIZE))
         PANIC("Unaligned vaddr=%x", vaddr);
@@ -243,15 +243,6 @@ struct process *create_process(const void *image, size_t image_size) {
 }
 
 
-void handle_trap (struct trap_frame *f) {
-    uint32_t scause = READ_CSR(scause);
-    uint32_t stval  = READ_CSR(stval);
-    uint32_t user_pc = READ_CSR(sepc);
-
-    PANIC("Unexpected trap scause=%x, stavl=%x, sepc=%x\n", scause, stval, user_pc);
-}
-
-
 struct sbiret sbi_call(long arg0, long arg1, long arg2, long arg3, long arg4,
                        long arg5, long fid, long eid) {
     register long a0 __asm__("a0") = arg0;
@@ -274,6 +265,49 @@ struct sbiret sbi_call(long arg0, long arg1, long arg2, long arg3, long arg4,
 
 void putchar(char ch) {
     sbi_call(ch, 0, 0, 0, 0, 0, 0, 1 /* Console Putchar */);
+}
+
+long getchar(void) {
+    struct sbiret ret = sbi_call(0, 0, 0, 0, 0, 0, 0, 2);
+    return ret.error;
+}
+
+
+void handle_syscall(struct trap_frame *f) {
+    switch (f->a3) {
+        case SYS_GETCHAR:
+            while(1) {
+                long ch = getchar();
+                if (ch >= 0) {
+                    f->a0 = ch;
+                    break;
+                }
+                yield();
+            }
+            break;
+        case SYS_PUTCHAR:
+            putchar(f->a0);
+            break;
+        default:
+            PANIC("unexpected syscall a3=%x\n", f->a3);
+    }
+}
+
+
+void handle_trap (struct trap_frame *f) {
+    uint32_t scause = READ_CSR(scause);
+    uint32_t stval  = READ_CSR(stval);
+    uint32_t user_pc = READ_CSR(sepc);
+
+    if (scause == SCAUSE_ECALL) {
+        handle_syscall(f);
+        user_pc += 4;
+    } else {
+        PANIC("Unexpected trap scause=%x, stval=%x, sepc=%x\n", 
+              scause, stval, user_pc);
+    }
+
+    WRITE_CSR(sepc, user_pc);
 }
 
 
@@ -370,10 +404,10 @@ void kernel_main(void) {
 
     // proc_a_entry();
 
-    __asm__ __volatile__("unimp");
+    // __asm__ __volatile__("unimp");
 
-    PANIC("BOOTED!\n");
-    printf("Unreachable\n");
+    // PANIC("BOOTED!\n");
+    // printf("Unreachable\n");
 }
 
 __attribute__((section(".text.boot")))

@@ -14,7 +14,7 @@ SECTIONS {
         *(.rodata .rodata.*);
     }
 
-    /* data with intial values  */
+    /* data with initial values  */
     .data : ALIGN(4) {
         *(.data .data.*);
     }
@@ -24,7 +24,7 @@ SECTIONS {
 
         . = ALIGN(16);
         . += 64 * 1024; /* 64KB */
-        __stack_top = .;
+        __user_stack_top = .; /* Changed from __stack_top */
 
         ASSERT(. < 0x1800000, "too large executable");
     }

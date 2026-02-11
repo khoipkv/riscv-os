@@ -14,6 +14,9 @@
 #define SSTATUS_SPIE    (1 << 5)
 
 #define USER_BASE       0x1000000
+#define PHYSTOP         0x88000000
+
+#define SCAUSE_ECALL    8
 
 #define READ_CSR(reg)                                               \
     ({                                                              \
@@ -28,6 +31,11 @@
         __asm__ __volatile__("csrw " #reg ", %0" :: "r"(__tmp));    \
     } while (0)
 
+#define PANIC(fmt, ...)                                                         \
+    do {                                                                        \
+        printf("PANIC: %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__);   \
+        while (1) {}                                                            \
+    } while (0)                                                                 \
 
 struct sbiret {
     long error;
@@ -76,3 +84,5 @@ struct trap_frame {
     uint32_t s11;
     uint32_t sp;
 } __attribute__((packed));
+
+void yield(void);
