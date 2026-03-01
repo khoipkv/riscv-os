@@ -14,10 +14,12 @@
 #define is_aligned(value, align) __builtin_is_aligned(value, align)
 #define offsetof(type, member)   __builtin_offsetof(type, member)
 
-#define PAGE_SIZE 4096
-#define SYS_PUTCHAR 1
-#define SYS_GETCHAR 2
-#define SYS_EXIT    3
+#define PAGE_SIZE       4096
+#define SYS_PUTCHAR     1
+#define SYS_GETCHAR     2
+#define SYS_EXIT        3
+#define SYS_READFILE    4
+#define SYS_WRITEFILE   5
 
 #define PANIC(fmt, ...)                                                         \
     do {                                                                        \
