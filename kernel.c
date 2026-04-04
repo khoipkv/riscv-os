@@ -274,7 +274,14 @@ struct sbiret sbi_call(long arg0, long arg1, long arg2, long arg3, long arg4,
 
 
 void putchar(char ch) {
-    sbi_call(ch, 0, 0, 0, 0, 0, 0, 1 /* Console Putchar */);
+    if (ch == 0x7f) {
+        sbi_call('\b', 0, 0, 0, 0, 0, 0, 1 /* Console Putchar */);
+        sbi_call(' ', 0, 0, 0, 0, 0, 0, 1 /* Console Putchar */);
+        sbi_call('\b', 0, 0, 0, 0, 0, 0, 1 /* Console Putchar */);
+    }
+    else {    
+        sbi_call(ch, 0, 0, 0, 0, 0, 0, 1 /* Console Putchar */);
+    }
 }
 
 long getchar(void) {
