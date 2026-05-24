@@ -76,30 +76,30 @@ void kernel_entry(void) {
         "lw t0,  4 * 3(sp)\n"
         "lw t1,  4 * 4(sp)\n"
         "lw t2,  4 * 5(sp)\n"
-        "lw t3,  4 * 6(sp)\n"
-        "lw t4,  4 * 7(sp)\n"
-        "lw t5,  4 * 8(sp)\n"
-        "lw t6,  4 * 9(sp)\n"
-        "lw a0,  4 * 10(sp)\n"
-        "lw a1,  4 * 11(sp)\n"
-        "lw a2,  4 * 12(sp)\n"
-        "lw a3,  4 * 13(sp)\n"
-        "lw a4,  4 * 14(sp)\n"
-        "lw a5,  4 * 15(sp)\n"
-        "lw a6,  4 * 16(sp)\n"
-        "lw a7,  4 * 17(sp)\n"
-        "lw s0,  4 * 18(sp)\n"
-        "lw s1,  4 * 19(sp)\n"
-        "lw s2,  4 * 20(sp)\n"
-        "lw s3,  4 * 21(sp)\n"
-        "lw s4,  4 * 22(sp)\n"
-        "lw s5,  4 * 23(sp)\n"
-        "lw s6,  4 * 24(sp)\n"
-        "lw s7,  4 * 25(sp)\n"
-        "lw s8,  4 * 26(sp)\n"
-        "lw s9,  4 * 27(sp)\n"
-        "lw s10, 4 * 28(sp)\n"
-        "lw s11, 4 * 29(sp)\n"
+        "lw s0,  4 * 6(sp)\n"
+        "lw s1,  4 * 7(sp)\n"
+        "lw a0,  4 * 8(sp)\n"
+        "lw a1,  4 * 9(sp)\n"
+        "lw a2,  4 * 10(sp)\n"
+        "lw a3,  4 * 11(sp)\n"
+        "lw a4,  4 * 12(sp)\n"
+        "lw a5,  4 * 13(sp)\n"
+        "lw a6,  4 * 14(sp)\n"
+        "lw a7,  4 * 15(sp)\n"
+        "lw s2,  4 * 16(sp)\n"
+        "lw s3,  4 * 17(sp)\n"
+        "lw s4,  4 * 18(sp)\n"
+        "lw s5,  4 * 19(sp)\n"
+        "lw s6,  4 * 20(sp)\n"
+        "lw s7,  4 * 21(sp)\n"
+        "lw s8,  4 * 22(sp)\n"
+        "lw s9,  4 * 23(sp)\n"
+        "lw s10, 4 * 24(sp)\n"
+        "lw s11, 4 * 25(sp)\n"
+        "lw t3,  4 * 26(sp)\n"
+        "lw t4,  4 * 27(sp)\n"
+        "lw t5,  4 * 28(sp)\n"
+        "lw t6,  4 * 29(sp)\n"
         "lw sp,  4 * 30(sp)\n"
         "sret\n"
     );
@@ -666,14 +666,6 @@ void kernel_main(void) {
 
     virtio_blk_init();
     fs_init();
-
-    char buf[SECTOR_SIZE];
-    read_write_disk(buf, 0, false /* read from the disk */);
-    printf("first sector: %s\n", buf);
-
-    strcpy(buf, "hello from kernel!!!\n");
-    read_write_disk(buf, 0, true /* write to the disk */);
-
 
     idle_proc = create_process(NULL, 0);
     idle_proc->pid = 0;
