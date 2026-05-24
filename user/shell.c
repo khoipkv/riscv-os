@@ -104,9 +104,6 @@ prompt:
             }
         }
 
-        // Debug output to verify command parsing
-        printf("\n>>>>%s<<<<\n", cmdline);
-
         // Command Execution
         if (strcmp(cmdline, "hello") == 0) {
             printf("Hello world from shell!\n");

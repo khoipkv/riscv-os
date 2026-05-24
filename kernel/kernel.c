@@ -4,7 +4,7 @@
 extern char __bss[], __bss_end[], __stack_top[];
 extern char __free_ram[], __free_ram_end[];
 extern char __kernel_base[];
-extern char _binary_shell_bin_start[], _binary_shell_bin_size[];
+extern char _binary_user_shell_bin_start[], _binary_user_shell_bin_size[];
 
 struct process procs[PROCS_MAX];
 struct process * proc_a;
@@ -34,30 +34,30 @@ void kernel_entry(void) {
         "sw t0,  4 * 3(sp)\n"
         "sw t1,  4 * 4(sp)\n"
         "sw t2,  4 * 5(sp)\n"
-        "sw t3,  4 * 6(sp)\n"
-        "sw t4,  4 * 7(sp)\n"
-        "sw t5,  4 * 8(sp)\n"
-        "sw t6,  4 * 9(sp)\n"
-        "sw a0,  4 * 10(sp)\n"
-        "sw a1,  4 * 11(sp)\n"
-        "sw a2,  4 * 12(sp)\n"
-        "sw a3,  4 * 13(sp)\n"
-        "sw a4,  4 * 14(sp)\n"
-        "sw a5,  4 * 15(sp)\n"
-        "sw a6,  4 * 16(sp)\n"
-        "sw a7,  4 * 17(sp)\n"
-        "sw s0,  4 * 18(sp)\n"
-        "sw s1,  4 * 19(sp)\n"
-        "sw s2,  4 * 20(sp)\n"
-        "sw s3,  4 * 21(sp)\n"
-        "sw s4,  4 * 22(sp)\n"
-        "sw s5,  4 * 23(sp)\n"
-        "sw s6,  4 * 24(sp)\n"
-        "sw s7,  4 * 25(sp)\n"
-        "sw s8,  4 * 26(sp)\n"
-        "sw s9,  4 * 27(sp)\n"
-        "sw s10, 4 * 28(sp)\n"
-        "sw s11, 4 * 29(sp)\n"
+        "sw s0,  4 * 6(sp)\n"
+        "sw s1,  4 * 7(sp)\n"
+        "sw a0,  4 * 8(sp)\n"
+        "sw a1,  4 * 9(sp)\n"
+        "sw a2,  4 * 10(sp)\n"
+        "sw a3,  4 * 11(sp)\n"
+        "sw a4,  4 * 12(sp)\n"
+        "sw a5,  4 * 13(sp)\n"
+        "sw a6,  4 * 14(sp)\n"
+        "sw a7,  4 * 15(sp)\n"
+        "sw s2,  4 * 16(sp)\n"
+        "sw s3,  4 * 17(sp)\n"
+        "sw s4,  4 * 18(sp)\n"
+        "sw s5,  4 * 19(sp)\n"
+        "sw s6,  4 * 20(sp)\n"
+        "sw s7,  4 * 21(sp)\n"
+        "sw s8,  4 * 22(sp)\n"
+        "sw s9,  4 * 23(sp)\n"
+        "sw s10, 4 * 24(sp)\n"
+        "sw s11, 4 * 25(sp)\n"
+        "sw t3,  4 * 26(sp)\n"
+        "sw t4,  4 * 27(sp)\n"
+        "sw t5,  4 * 28(sp)\n"
+        "sw t6,  4 * 29(sp)\n"
 
         // Get and save the sp at the time of exception
         "csrr a0, sscratch\n"
@@ -659,11 +659,7 @@ void proc_b_entry(void) {
 
 
 void kernel_main(void) {
-    // paddr_t paddr0 = alloc_pages(2);
-    // paddr_t paddr1 = alloc_pages(1);
-    
-    // printf("alloc_pages test: paddr0=%x\n", paddr0);
-    // printf("alloc_pages test: paddr1=%x\n", paddr1);
+    // init_timer();
 
     memset(__bss, 0, (size_t) __bss_end - (size_t) __bss);
     WRITE_CSR(stvec, (uint32_t) kernel_entry);
@@ -683,20 +679,12 @@ void kernel_main(void) {
     idle_proc->pid = 0;
     curr_proc = idle_proc;
 
-    create_process(_binary_shell_bin_start, (size_t) _binary_shell_bin_size);
+    create_process(_binary_user_shell_bin_start, (size_t) _binary_user_shell_bin_size);
 
-    // proc_a = create_process((uint32_t) proc_a_entry);
-    // proc_b = create_process((uint32_t) proc_b_entry);
     
     yield();
     PANIC("Switched to idle process");
 
-    // proc_a_entry();
-
-    // __asm__ __volatile__("unimp");
-
-    // PANIC("BOOTED!\n");
-    // printf("Unreachable\n");
 }
 
 __attribute__((section(".text.boot")))
